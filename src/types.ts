@@ -100,6 +100,7 @@ export interface Phase {
   readonly id: string;
   readonly name: string;
   readonly position: number;
+  readonly applicable_when?: string;
   readonly created_at: string;
 }
 
@@ -107,12 +108,14 @@ export interface Phase {
 export interface CreatePhaseRequest {
   readonly name: string;
   readonly position: number;
+  readonly applicable_when?: string;
 }
 
 /** Payload to update a phase. */
 export interface UpdatePhaseRequest {
   readonly name?: string;
   readonly position?: number;
+  readonly applicable_when?: string;
 }
 
 // ---- Scopes ----------------------------------------------------------------

@@ -19,6 +19,7 @@ interface Step {
   readonly kind: StepKind;
   readonly name: string;
   readonly position: number;
+  readonly applicableWhen: string;
   readonly jsonPath: string;
   readonly ruleBuilder: ProvisionRuleBuilder | undefined;
 }
@@ -56,6 +57,26 @@ export class Provisioner {
       kind: STEP_PHASE,
       name,
       position,
+      applicableWhen: '',
+      jsonPath: '',
+      ruleBuilder: undefined,
+    });
+    return this;
+  }
+
+  /**
+   * Registers a pipeline phase with an applicable_when CEL expression.
+   * @param name - The phase name.
+   * @param position - The phase position (execution order).
+   * @param applicableWhen - CEL expression controlling when this phase runs.
+   * @returns This provisioner for chaining.
+   */
+  phaseWithFilter(name: string, position: number, applicableWhen: string): this {
+    this.steps.push({
+      kind: STEP_PHASE,
+      name,
+      position,
+      applicableWhen,
       jsonPath: '',
       ruleBuilder: undefined,
     });
@@ -73,6 +94,7 @@ export class Provisioner {
       kind: STEP_SCOPE,
       name,
       position: 0,
+      applicableWhen: '',
       jsonPath,
       ruleBuilder: undefined,
     });
@@ -89,6 +111,7 @@ export class Provisioner {
       kind: STEP_LIST,
       name,
       position: 0,
+      applicableWhen: '',
       jsonPath: '',
       ruleBuilder: undefined,
     });
@@ -115,6 +138,7 @@ export class Provisioner {
       kind: STEP_RULE,
       name: rb.ruleName,
       position: 0,
+      applicableWhen: '',
       jsonPath: '',
       ruleBuilder: rb,
     });
@@ -191,7 +215,10 @@ export class Provisioner {
     return this.rules.get(name) ?? '';
   }
 
-  /** Dispatches a single step to the appropriate creator. */
+  /**
+   * Dispatches a single step to the appropriate creator.
+   * @param step
+   */
   private async applyStep(step: Step): Promise<void> {
     switch (step.kind) {
       case STEP_PHASE:
@@ -205,16 +232,26 @@ export class Provisioner {
     }
   }
 
-  /** Creates a phase and stores its ID. */
+  /**
+   * Creates a phase and stores its ID.
+   * @param step
+   */
   private async createPhase(step: Step): Promise<void> {
-    const phase = await this.client.phases.create({
+    const req: { name: string; position: number; applicable_when?: string } = {
       name: step.name,
       position: step.position,
-    });
+    };
+    if (step.applicableWhen) {
+      req.applicable_when = step.applicableWhen;
+    }
+    const phase = await this.client.phases.create(req);
     this.phases.set(step.name, phase.id);
   }
 
-  /** Creates a scope and stores its ID. */
+  /**
+   * Creates a scope and stores its ID.
+   * @param step
+   */
   private async createScope(step: Step): Promise<void> {
     const scope = await this.client.scopes.create({
       name: step.name,
@@ -223,7 +260,10 @@ export class Provisioner {
     this.scopes.set(step.name, scope.id);
   }
 
-  /** Creates a list and stores its ID. */
+  /**
+   * Creates a list and stores its ID.
+   * @param step
+   */
   private async createList(step: Step): Promise<void> {
     const list = await this.client.lists.create({
       name: step.name,
@@ -232,7 +272,10 @@ export class Provisioner {
     this.lists.set(step.name, list.id);
   }
 
-  /** Creates a rule after resolving its phase name to an ID. */
+  /**
+   * Creates a rule after resolving its phase name to an ID.
+   * @param step
+   */
   private async createRule(step: Step): Promise<void> {
     const rb = step.ruleBuilder;
     if (!rb) {
@@ -241,9 +284,7 @@ export class Provisioner {
 
     const phaseID = this.phases.get(rb.phaseName);
     if (!phaseID) {
-      throw new Error(
-        `provision rule "${rb.ruleName}": phase not found: ${rb.phaseName}`,
-      );
+      throw new Error(`provision rule "${rb.ruleName}": phase not found: ${rb.phaseName}`);
     }
 
     const rule = await this.client.rules.create({
@@ -259,7 +300,12 @@ export class Provisioner {
     this.rules.set(rb.ruleName, rule.id);
   }
 
-  /** Deletes all resources in a map, recording errors. */
+  /**
+   * Deletes all resources in a map, recording errors.
+   * @param ids
+   * @param deleteFn
+   * @param record
+   */
   private async deleteAll(
     ids: Map<string, string>,
     deleteFn: (id: string) => Promise<void>,

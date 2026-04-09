@@ -46,6 +46,15 @@ export { Audit } from './resources/audit.js';
 export { EventBuilder } from './builders/event.js';
 export { RuleBuilder } from './builders/rule.js';
 
+// Provision
+export { Provisioner } from './provision/index.js';
+export { ProvisionRuleBuilder } from './provision/index.js';
+
+// Testkit
+export { Harness, withHarness } from './testkit/index.js';
+export type { HarnessConfig } from './testkit/index.js';
+export { EventAssertion } from './testkit/index.js';
+
 // Types
 export type {
   // Core domain
@@ -53,6 +62,7 @@ export type {
   Flow,
   Decision,
   ScoreOperation,
+  ListMutation,
   Actions,
   Rule,
   RuleVersion,

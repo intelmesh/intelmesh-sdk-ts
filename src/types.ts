@@ -20,11 +20,19 @@ export interface ScoreOperation {
   readonly add: number;
 }
 
+/** A side-effect mutation triggered by a rule (e.g. list add/remove). */
+export interface ListMutation {
+  readonly type: string;
+  readonly target: string;
+  readonly value_path: string;
+}
+
 /** Actions triggered when a rule matches. */
 export interface Actions {
   readonly decision?: Decision;
   readonly flow?: Flow;
   readonly score?: ScoreOperation;
+  readonly mutations?: readonly ListMutation[];
 }
 
 // ---- Rules -----------------------------------------------------------------

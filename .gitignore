@@ -27,3 +27,6 @@ npm-debug.log*
 
 # Claude
 .claude
+
+# Local tooling binaries (actionlint, etc)
+.tools/

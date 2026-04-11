@@ -25,20 +25,15 @@ export class EventAssertion {
    */
   expectDecision(action: string, severity: string): this {
     const decision = this.result.decision;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive runtime guard: API may return unexpected shapes despite type definition
     if (!decision) {
-      throw new Error(
-        `testkit: expected decision ${action}/${severity}, got no decision`,
-      );
+      throw new Error(`testkit: expected decision ${action}/${severity}, got no decision`);
     }
     if (decision.action !== action) {
-      throw new Error(
-        `testkit: decision action: got "${decision.action}", want "${action}"`,
-      );
+      throw new Error(`testkit: decision action: got "${decision.action}", want "${action}"`);
     }
     if (decision.severity !== severity) {
-      throw new Error(
-        `testkit: decision severity: got "${decision.severity}", want "${severity}"`,
-      );
+      throw new Error(`testkit: decision severity: got "${decision.severity}", want "${severity}"`);
     }
     return this;
   }
@@ -50,10 +45,8 @@ export class EventAssertion {
    */
   expectNoDecision(): this {
     const decision = this.result.decision;
-    if (decision && decision.action !== '') {
-      throw new Error(
-        `testkit: expected no decision, got ${decision.action}/${decision.severity}`,
-      );
+    if (decision.action !== '') {
+      throw new Error(`testkit: expected no decision, got ${decision.action}/${decision.severity}`);
     }
     return this;
   }

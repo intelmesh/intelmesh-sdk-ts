@@ -73,6 +73,8 @@ jobs:
     name: Test on Node ${{ matrix.node-version }}
     needs: verify-signature
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     strategy:
       fail-fast: true
       matrix:

@@ -68,3 +68,36 @@ jobs:
             echo "::error title=Unsigned tag::Tag ${tag} signature is NOT verified by GitHub. Reason: ${reason}. Refusing to release."
             exit 1
           fi
+
+  test:
+    name: Test on Node ${{ matrix.node-version }}
+    needs: verify-signature
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: true
+      matrix:
+        node-version: ['20', '22', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

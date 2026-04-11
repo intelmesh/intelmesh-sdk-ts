@@ -18,7 +18,10 @@ jobs:
   verify-signature:
     name: Verify commit and tag are signed
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
+      # No checkout needed: this job only queries the GitHub API via `gh`.
       - name: Verify commit signature
         env:
           GH_TOKEN: ${{ github.token }}
@@ -27,10 +30,9 @@ jobs:
           commit_sha="${GITHUB_SHA}"
           repo="${GITHUB_REPOSITORY}"
 
-          verified=$(gh api "repos/${repo}/commits/${commit_sha}" \
-            --jq '.commit.verification.verified')
-          reason=$(gh api "repos/${repo}/commits/${commit_sha}" \
-            --jq '.commit.verification.reason')
+          commit_json=$(gh api "repos/${repo}/commits/${commit_sha}")
+          verified=$(jq -r '.commit.verification.verified' <<<"${commit_json}")
+          reason=$(jq -r '.commit.verification.reason' <<<"${commit_json}")
 
           echo "commit=${commit_sha} verified=${verified} reason=${reason}"
 
@@ -48,18 +50,17 @@ jobs:
           repo="${GITHUB_REPOSITORY}"
 
           ref_json=$(gh api "repos/${repo}/git/refs/tags/${tag}")
-          obj_type=$(echo "${ref_json}" | jq -r '.object.type')
-          obj_sha=$(echo "${ref_json}" | jq -r '.object.sha')
+          obj_type=$(jq -r '.object.type' <<<"${ref_json}")
+          obj_sha=$(jq -r '.object.sha' <<<"${ref_json}")
 
           if [ "${obj_type}" != "tag" ]; then
             echo "::error title=Lightweight tag::Tag ${tag} is a lightweight tag (object.type=${obj_type}). Use 'git tag -s ${tag}' to create a signed annotated tag. Refusing to release."
             exit 1
           fi
 
-          verified=$(gh api "repos/${repo}/git/tags/${obj_sha}" \
-            --jq '.verification.verified')
-          reason=$(gh api "repos/${repo}/git/tags/${obj_sha}" \
-            --jq '.verification.reason')
+          tag_json=$(gh api "repos/${repo}/git/tags/${obj_sha}")
+          verified=$(jq -r '.verification.verified' <<<"${tag_json}")
+          reason=$(jq -r '.verification.reason' <<<"${tag_json}")
 
           echo "tag=${tag} object_sha=${obj_sha} verified=${verified} reason=${reason}"
 

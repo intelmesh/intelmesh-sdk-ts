@@ -103,3 +103,56 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  publish-npm:
+    name: Publish to npm
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      version: ${{ steps.disttag.outputs.version }}
+      disttag: ${{ steps.disttag.outputs.disttag }}
+      is_prerelease: ${{ steps.disttag.outputs.is_prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Compute dist-tag from git tag
+        id: disttag
+        run: bash .github/scripts/compute-disttag.sh
+
+      - name: Verify package.json version matches git tag
+        run: |
+          set -euo pipefail
+          pkg_version=$(node -p "require('./package.json').version")
+          git_version="${{ steps.disttag.outputs.version }}"
+          if [ "${pkg_version}" != "${git_version}" ]; then
+            echo "::error title=Version mismatch::package.json version (${pkg_version}) does not match git tag (${git_version}). Bump package.json before tagging."
+            exit 1
+          fi
+          echo "package.json and git tag both at ${pkg_version}"
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm publish \
+            --provenance \
+            --access public \
+            --tag "${{ steps.disttag.outputs.disttag }}"

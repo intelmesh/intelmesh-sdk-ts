@@ -148,8 +148,6 @@ jobs:
           echo "package.json and git tag both at ${pkg_version}"
 
       - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           npm publish \

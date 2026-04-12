@@ -30,7 +30,12 @@ export class ProvisionRuleBuilder {
   /** @internal */ ruleMutations: MutationSpec[] = [];
   /** @internal */ isDryRun = false;
 
-  /** @internal */
+  /**
+   * Constructs a new ProvisionRuleBuilder.
+   * @param parent
+   * @param name
+   * @internal
+   */
   constructor(parent: Provisioner, name: string) {
     this.parent = parent;
     this.ruleName = name;

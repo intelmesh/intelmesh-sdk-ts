@@ -44,6 +44,14 @@
   ],
   "author": "IntelMesh",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/intelmesh/intelmesh-sdk-ts.git"
+  },
+  "homepage": "https://github.com/intelmesh/intelmesh-sdk-ts#readme",
+  "bugs": {
+    "url": "https://github.com/intelmesh/intelmesh-sdk-ts/issues"
+  },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",

@@ -1,0 +1,207 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-signature:
+    name: Verify commit and tag are signed
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      # No checkout needed: this job only queries the GitHub API via `gh`.
+      - name: Verify commit signature
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          commit_sha="${GITHUB_SHA}"
+          repo="${GITHUB_REPOSITORY}"
+
+          commit_json=$(gh api "repos/${repo}/commits/${commit_sha}")
+          verified=$(jq -r '.commit.verification.verified' <<<"${commit_json}")
+          reason=$(jq -r '.commit.verification.reason' <<<"${commit_json}")
+
+          echo "commit=${commit_sha} verified=${verified} reason=${reason}"
+
+          if [ "${verified}" != "true" ]; then
+            echo "::error title=Unsigned commit::Commit ${commit_sha} is NOT verified by GitHub. Reason: ${reason}. Refusing to release."
+            exit 1
+          fi
+
+      - name: Verify tag is a signed annotated tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          repo="${GITHUB_REPOSITORY}"
+
+          ref_json=$(gh api "repos/${repo}/git/refs/tags/${tag}")
+          obj_type=$(jq -r '.object.type' <<<"${ref_json}")
+          obj_sha=$(jq -r '.object.sha' <<<"${ref_json}")
+
+          if [ "${obj_type}" != "tag" ]; then
+            echo "::error title=Lightweight tag::Tag ${tag} is a lightweight tag (object.type=${obj_type}). Use 'git tag -s ${tag}' to create a signed annotated tag. Refusing to release."
+            exit 1
+          fi
+
+          tag_json=$(gh api "repos/${repo}/git/tags/${obj_sha}")
+          verified=$(jq -r '.verification.verified' <<<"${tag_json}")
+          reason=$(jq -r '.verification.reason' <<<"${tag_json}")
+
+          echo "tag=${tag} object_sha=${obj_sha} verified=${verified} reason=${reason}"
+
+          if [ "${verified}" != "true" ]; then
+            echo "::error title=Unsigned tag::Tag ${tag} signature is NOT verified by GitHub. Reason: ${reason}. Refusing to release."
+            exit 1
+          fi
+
+  test:
+    name: Test on Node ${{ matrix.node-version }}
+    needs: verify-signature
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        node-version: ['20', '22', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  publish-npm:
+    name: Publish to npm
+    needs: test
+    runs-on: ubuntu-24.04
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      version: ${{ steps.disttag.outputs.version }}
+      disttag: ${{ steps.disttag.outputs.disttag }}
+      is_prerelease: ${{ steps.disttag.outputs.is_prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Compute dist-tag from git tag
+        id: disttag
+        run: bash .github/scripts/compute-disttag.sh
+
+      - name: Verify package.json version matches git tag
+        run: |
+          set -euo pipefail
+          pkg_version=$(node -p "require('./package.json').version")
+          git_version="${{ steps.disttag.outputs.version }}"
+          if [ "${pkg_version}" != "${git_version}" ]; then
+            echo "::error title=Version mismatch::package.json version (${pkg_version}) does not match git tag (${git_version}). Bump package.json before tagging."
+            exit 1
+          fi
+          echo "package.json and git tag both at ${pkg_version}"
+
+      - name: Publish to npm
+        run: |
+          set -euo pipefail
+          npm publish \
+            --provenance \
+            --access public \
+            --tag "${{ steps.disttag.outputs.disttag }}"
+
+  github-release:
+    name: Create GitHub Release
+    needs: publish-npm
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Pack tarball
+        run: npm pack
+
+      - name: Create GitHub Release (stable)
+        if: needs.publish-npm.outputs.is_prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" \
+            ./intelmesh-sdk-*.tgz \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes
+
+      - name: Create GitHub Release (prerelease)
+        if: needs.publish-npm.outputs.is_prerelease == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" \
+            ./intelmesh-sdk-*.tgz \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --prerelease

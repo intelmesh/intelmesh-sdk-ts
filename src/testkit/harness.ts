@@ -68,7 +68,7 @@ export class Harness {
    */
   async setup(): Promise<void> {
     const result = await this.adminClient.apiKeys.create({
-      name: `testkit-${Date.now()}`,
+      name: `testkit-${String(Date.now())}`,
       permissions: [...ALL_PERMISSIONS],
     });
 
@@ -107,10 +107,7 @@ export class Harness {
    * @param payload - The event payload.
    * @returns An EventAssertion for chaining assertions.
    */
-  async send(
-    eventType: string,
-    payload: Record<string, unknown>,
-  ): Promise<EventAssertion> {
+  async send(eventType: string, payload: Record<string, unknown>): Promise<EventAssertion> {
     const c = this.client();
     const result = await c.events.ingest({
       event_type: eventType,
@@ -125,10 +122,7 @@ export class Harness {
    * @param payload - The event payload.
    * @returns An EventAssertion for chaining assertions.
    */
-  async sendSimulate(
-    eventType: string,
-    payload: Record<string, unknown>,
-  ): Promise<EventAssertion> {
+  async sendSimulate(eventType: string, payload: Record<string, unknown>): Promise<EventAssertion> {
     const c = this.client();
     const result = await c.events.simulate({
       event_type: eventType,
@@ -180,6 +174,7 @@ export class Harness {
         await this.provisioner.teardown();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'unknown error';
+        // eslint-disable-next-line no-console -- intentional warning in test utility cleanup; not production code
         console.warn(`testkit: teardown warning: ${msg}`);
       }
     }
@@ -189,30 +184,30 @@ export class Harness {
         await this.adminClient.apiKeys.delete(this.testKeyId);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'unknown error';
-        console.warn(
-          `testkit: warning: failed to delete ephemeral key ${this.testKeyId}: ${msg}`,
-        );
+        // eslint-disable-next-line no-console -- intentional warning in test utility cleanup; not production code
+        console.warn(`testkit: warning: failed to delete ephemeral key ${this.testKeyId}: ${msg}`);
       }
     }
   }
 
-  /** Internal list verification. */
+  /**
+   * Internal list verification.
+   * @param listName
+   * @param _value
+   * @param shouldContain
+   */
   private async verifyList(
     listName: string,
-    value: string,
+    _value: string,
     shouldContain: boolean,
   ): Promise<void> {
     if (!this.provisioner) {
-      throw new Error(
-        `testkit: no provisioner set, cannot resolve list "${listName}"`,
-      );
+      throw new Error(`testkit: no provisioner set, cannot resolve list "${listName}"`);
     }
 
     const listID = this.provisioner.listId(listName);
     if (!listID) {
-      throw new Error(
-        `testkit: list "${listName}" not found in provisioner`,
-      );
+      throw new Error(`testkit: list "${listName}" not found in provisioner`);
     }
 
     const c = this.client();
@@ -222,10 +217,9 @@ export class Harness {
     // For now we verify the list exists. Full item verification requires
     // the list items endpoint to be available.
     // This is a placeholder that checks the list is accessible.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive runtime guard: API may return unexpected shapes despite type definition
     if (!page) {
-      throw new Error(
-        `testkit: could not retrieve list "${listName}" (${listID})`,
-      );
+      throw new Error(`testkit: could not retrieve list "${listName}" (${listID})`);
     }
 
     // Note: Full list-item membership checks require a list items API.
@@ -241,7 +235,6 @@ export class Harness {
  * Convenience wrapper that manages setup and cleanup automatically.
  * The harness is set up before the callback and cleaned up after,
  * even if the callback throws.
- *
  * @param config - The harness configuration.
  * @param fn - The async test function receiving the harness.
  */

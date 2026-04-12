@@ -156,3 +156,53 @@ jobs:
             --provenance \
             --access public \
             --tag "${{ steps.disttag.outputs.disttag }}"
+
+  github-release:
+    name: Create GitHub Release
+    needs: publish-npm
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Pack tarball
+        run: npm pack
+
+      - name: Create GitHub Release (stable)
+        if: needs.publish-npm.outputs.is_prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" \
+            ./intelmesh-sdk-*.tgz \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes
+
+      - name: Create GitHub Release (prerelease)
+        if: needs.publish-npm.outputs.is_prerelease == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" \
+            ./intelmesh-sdk-*.tgz \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --prerelease
